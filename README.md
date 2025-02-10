@@ -12,32 +12,19 @@ This work is licensed under a Creative Commons Attribution Non-Commercial 4.0 In
 This publication is part of the GDPoweR – Recovering workers’ data to negotiate and monitor collective agreements in the platform economy, which has received funding by the European Commission, DG Employment, Social Affairs and Inclusion, within the Social Prerogatives and Specific Competencies Lines (SocPL). The information and views set out in this document are those of the authors and do not necessarily reflect the views and official opinion of the European Union. Neither the European Union institutions and bodies nor any person acting on their behalf may be held responsible for the use which may be made of the information contained therein.
 
 ### Instructions
-The code in this folder was developed to visualize personal data platform workers requested from the platforms they work with through Subject Access Requests. It produces an html-dashboard with statistics and charts on incomes, shifts and working hours and deliveries as well as maps based on GPS locations. This folder also contains a sample dataset of randomly generated mock data and an example dashboard created from this dataset. To create a dashboard with visualizations of your own data, you can fill out the blank Excel file "Blank_Spreadsheet.xlsx" in the folder with your data and save the completed file in the "Your Data" folder. After modifying the markdown code to use your new file instead of the test data, you can push a button to generate the dashboard.
+The code in this repository was developed to visualize personal data platform workers requested from the platforms they work with through Subject Access Requests. It produces an html-dashboard with statistics and charts on incomes, shifts and working hours and deliveries as well as maps based on GPS locations. 
 
-Step-by-step instructions are provided below.
-1. Complete the spreadsheet "Blank_Spreadsheet.xlsx" in the folder Your Data
- - Follow the instructions detailed below. Pay special attention to the recommended procedures for dealing with missing data, as improperly handling missing data can cause issues during data processing.
- - Leave columns blank if data is missing
-
-2. rename it to "YourFileName.xlsx"
-
-3. Open the R Project file and then the R Markdown file
-
-4. Click the "Knit" button to update the dashboard, which will then appear in the viewer, it may take a while to load depending on how much data you have. You can either expand the viewer or navigate back to the folder and open "Code_GDPoweR.html" which now contains the dashboard based on your data. Keep in mind that each time you knit the file, it will overwrite the existing file. Therefore, if you want to create more dashboard html files, make sure to rename and save it.
-
-Feel free to adjust the code to your needs. To run individual chunks of code, click on the green play-symbol on the top right corner for each chunk.
-
+To create a dashboard with visualizations of your own data, first download all the files and place them in a folder. Then fill out the blank Excel file "datafile.xlsx" in the folder with your data and save the completed file. Finally open the markdown code, set your working enviorment to the folder with all of the repository files and push the knit button to generate the dashboard.
 
 ### Completing the Blank Spreadsheet with Your Data
 
-This guide provides detailed instructions on how to input data into each column of the provided blank spreadsheet for the corresponding data frames which are seperated out into tabs in the spreadsheet. 
 When pasting your data, ensure the columns remain in the correct order to maintain accuracy and consistency across rows. 
 Additionally, do not modify the order of the tabs in the spreadsheet.
 
 #### Key Considerations
 
 ##### Handling Missing Data
-Properly managing missing data is essential to prevent errors during processing and to generate accurate visualizations from the available information. Follow these guidelines:
+Properly managing missing data is essential to prevent errors during processing.
 
 1. **Entire Dataframe Missing**:  
    If a complete dataframe is unavailable, leave the corresponding tab in the Excel file entirely blank. Do not insert placeholders, delete columns, or remove the tab itself.
@@ -46,19 +33,19 @@ Properly managing missing data is essential to prevent errors during processing 
    If some columns are missing within a dataframe, keep the empty columns intact, including their headers. Do not delete them.
 
 ##### Time Zones
-The script assumes that the input data is in UTC, which it converts to CEST. If your data is not in UTC or your target timezone is not CEST, you must adjust the script to correctly read and convert the data to your target time zone.
+The script assumes the input data is in UTC and converts it to CEST. If your data is in a different time zone or your target time zone is not CEST, you must modify the script accordingly. Specifically, update all instances of tzone = "Europe/Berlin" to match your desired time zone. Likewise, if your input data is not in UTC, adjust all occurrences of tz = "UTC" to reflect the correct source time zone.
 
 ##### Base Pay Types
-The spreadsheet and script are configured to process three distinct types of base pay. Ensure your input aligns with the expected format for accurate results.
+The spreadsheet and script are configured to process three distinct types of base pay.
 
 For questions or assistance, please contact Nikko Bilitza at bilitza@euro.centre.org.
 
 DATAFRAME 1: payments 
-Unit of observation: individual orders
+Unit of observation: individual orders or payments
 Required columns:
 $time_stamp: Timestamp of the payment. Format this as a date-time value (e.g., "2023-01-01 01:00:00").
-$pay_a, $pay_b, ...: Columns for various forms of base pay per order. Each column should contain numeric values representing different types of base payment. If there is only one column for base pay paste it into pay_a and leave the rest blank.
-$total_tips: Total tips received. This should be a numeric value indicating the sum of tips for an order.
+$pay_a, $pay_b, ...: Columns for various forms of base pay per timestampped payment. Each column should contain numeric values representing different types of base payment. If there is only one column for base pay paste it into pay_a and leave the rest blank.
+$total_tips: Total tips received. This should be a numeric value indicating the sum of tips for an order or payment.
 
 DATAFRAME 2: schedules
 Unit of observation: individual shifts
