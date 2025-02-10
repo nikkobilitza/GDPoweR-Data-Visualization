@@ -61,13 +61,7 @@ $time_pick_up: Time when the order or customer was picked up. Format this as a d
 $time_drop_off: Time when the order was completed. Format this as a date-time value (e.g., "2023-01-01 01:00:00").
 
 Location data:
-This can be represented in one of two ways:
 Separate columns for longitude and latitude: For each location type (accepted, pick-up, and drop-off), provide separate columns for longitude and latitude. Each column should contain numeric values.
-Location data in "POINT(longitude latitude)" format: Instead of separate columns for longitude and latitude, provide location data in the format "POINT(longitude latitude)". If you choose this format, delete the columns for longitude and latitude and add the data under the following columns:
-$accepted_at_location
-$picked_up_at_location
-$dropped_off_at_location
-After formatting the location data as "POINT(longitude latitude)", follow the provided R script to extract the coordinates for analysis. This will ensure that the location data is properly handled and ready for analysis.
 
 DATAFRAME 4: geolocation
 Unit of observation: gelocation pings
@@ -77,9 +71,6 @@ $timestamps_ping: Timestamp of the ping. Format this as a date-time value (e.g.,
 Location data:
 This can be represented in one of two ways:
 Separate columns for longitude and latitude: For each location type (accepted, pick-up, and drop-off), provide separate columns for longitude and latitude. Each column should contain numeric values.
-Location data in "POINT(longitude latitude)" format: Instead of separate columns for longitude and latitude, provide location data in the format "POINT(longitude latitude)". If you choose this format, delete the columns for longitude and latitude and add the data under the following columns:
-$location
-After formatting the location data as "POINT(longitude latitude)", follow the provided R script to extract the coordinates for analysis. This will ensure that the location data is properly handled and ready for analysis.
 
 DATAFRAME 5: breaks 
 Unit of observation: individual breaks
