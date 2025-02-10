@@ -1,0 +1,1228 @@
+---
+title: "GDPoweR Data Visualization Dashboard"
+output: 
+  flexdashboard::flex_dashboard:
+    theme: yeti
+    vertical_layout: fill
+---
+
+```{r chunk_1, setup, include=FALSE}
+# Define Markdown Output
+knitr::opts_chunk$set(echo=FALSE, warning = FALSE, message = FALSE, error = TRUE)
+knitr::opts_chunk$set(tidy = FALSE)
+```
+
+
+
+```{r chunk_2, Section 0.0 Markdown & Libraries Setup}
+# 0.0 Set up Working Environment 
+# When you click the green run button, you will be prompted to select the excel file to be read into the code. 
+
+if (!requireNamespace("readxl", quietly = TRUE)) install.packages("readxl")
+if (!requireNamespace("sf", quietly = TRUE)) install.packages("sf")
+if (!requireNamespace("leaflet", quietly = TRUE)) install.packages("leaflet")
+if (!requireNamespace("tidyverse", quietly = TRUE)) install.packages("tidyverse")
+if (!requireNamespace("lubridate", quietly = TRUE)) install.packages("lubridate")
+if (!requireNamespace("knitr", quietly = TRUE)) install.packages("knitr")
+if (!requireNamespace("ggpubr", quietly = TRUE)) install.packages("ggpubr")
+if (!requireNamespace("htmlwidgets", quietly = TRUE)) install.packages("htmlwidgets")
+if (!requireNamespace("leaflet.extras", quietly = TRUE)) install.packages("leaflet.extras")
+if (!requireNamespace("geosphere", quietly = TRUE)) install.packages("geosphere")
+if (!requireNamespace("readr", quietly = TRUE)) install.packages("readr")
+if (!requireNamespace("jsonlite", quietly = TRUE)) install.packages("jsonlite")
+if (!requireNamespace("flexdashboard", quietly = TRUE)) install.packages("flexdashboard")
+if (!requireNamespace("grDevices", quietly = TRUE)) install.packages("grDevices")
+
+library(readxl)
+library(sf)
+library(leaflet)
+library(tidyverse)
+library(lubridate)
+library(knitr)
+library(kableExtra)
+library(ggpubr)
+library(htmlwidgets)
+library(leaflet.extras)
+library(geosphere)
+library(readr)
+library(jsonlite)
+library(flexdashboard)
+library(grDevices)
+
+
+```
+
+```{r  chunk_3, warning=FALSE, error=TRUE}
+## Step 1. Read in File
+# To start working with this data, you'll need to load the file into R. This chunk is set up to read in the data from a pre-formatted excel. 
+# ADVANCED: If you have the sufficient familiarity with R you could of course also read in the data in other formats and then reformat to match the end product dataframes.
+
+# Ensure that "datafile.xlsx" is in your working directory.
+# If you're unsure, check your working directory with getwd().
+# Then, click "Knit" (if using R Markdown) or run the script.
+
+file_path <- "./datafile.xlsx"
+
+
+
+ ## 1. Excel (default option)
+
+# If the excel has multiple tabs extract the data into the dataframes, if the order of the tabs is different change the sheet = portion
+payments <- read_excel(file_path, sheet = 1)
+schedules <- read_excel(file_path, sheet = 2)
+deliveries <- read_excel(file_path, sheet = 3)
+geolocation <- read_excel(file_path, sheet = 4)
+breaks <- read_excel(file_path, sheet = 5)
+
+
+# Step 2. Ensuring Correct Data Types
+# Ensure all the columns are assigned the correct variable type and correctly formatted.
+## Step 1. Read in File
+# (rest of the code for reading in files is unchanged)
+
+# Step 2. Ensuring Correct Data Types and Converting Timezones
+# Ensuring Correct Data Types and Converting Timezones
+
+payments <- payments %>%
+  mutate(
+    time_stamp = as.POSIXct(time_stamp, format="%Y-%m-%d %H:%M:%OS", tz = "UTC"),
+    time_stamp = with_tz(time_stamp, tzone = "Europe/Berlin"),
+    across(starts_with("pay_"), as.numeric),
+    total_tips = as.numeric(total_tips)
+  ) %>% arrange(desc(time_stamp))
+
+schedules <- schedules %>%
+  mutate(
+    starting_time = as.POSIXct(starting_time, format="%Y-%m-%d %H:%M:%OS", tz = "UTC"),
+    starting_time = with_tz(starting_time, tzone = "Europe/Berlin"),
+    ending_time = as.POSIXct(ending_time, format="%Y-%m-%d %H:%M:%OS", tz = "UTC"),
+    ending_time = with_tz(ending_time, tzone = "Europe/Berlin")
+  ) %>% arrange(desc(starting_time)) %>% drop_na()
+
+deliveries <- deliveries %>%
+  mutate(
+    time_accepted = as.POSIXct(time_accepted, format="%Y-%m-%d %H:%M:%OS", tz = "UTC"),
+    time_accepted = with_tz(time_accepted, tzone = "Europe/Berlin"),
+    time_pick_up = as.POSIXct(time_pick_up, format="%Y-%m-%d %H:%M:%OS", tz = "UTC"),
+    time_pick_up = with_tz(time_pick_up, tzone = "Europe/Berlin"),
+    time_drop_off = as.POSIXct(time_drop_off, format="%Y-%m-%d %H:%M:%OS", tz = "UTC"),
+    time_drop_off = with_tz(time_drop_off, tzone = "Europe/Berlin"),
+    across(starts_with("longitude"), as.numeric),
+    across(starts_with("latitude"), as.numeric)
+  ) %>% arrange(desc(time_accepted))
+
+geolocation <- geolocation %>%
+  mutate(
+    timestamps_ping = as.POSIXct(timestamps_ping, format="%Y-%m-%d %H:%M:%OS", tz = "UTC"),
+    timestamps_ping = with_tz(timestamps_ping, tzone = "Europe/Berlin"),
+    across(starts_with("longitude"), as.numeric),
+    across(starts_with("latitude"), as.numeric)
+  ) %>% arrange(desc(timestamps_ping))
+
+breaks <- breaks %>%
+  mutate(
+    start_at = as.POSIXct(start_at, format="%Y-%m-%d %H:%M:%OS", tz = "UTC"),
+    start_at = with_tz(start_at, tzone = "Europe/Berlin"),
+    end_at = as.POSIXct(end_at, format="%Y-%m-%d %H:%M:%OS", tz = "UTC"),
+    end_at = with_tz(end_at, tzone = "Europe/Berlin")
+  ) %>% arrange(desc(start_at)) %>% drop_na()
+
+
+# Step 3. Check to see if everything worked
+# Look in the Environment Tab on the top-left side of the screen, 
+# You should now have the following dataframes loaded into R
+
+# DATAFRAME 1: payments
+# Required columns:
+# - $time_stamp: Timestamp of the payment (dttm)
+# - $pay_a, $pay_b, ... : Columns for various forms of base pay (double)
+# - $total_tips: Total tips received (double)
+
+# DATAFRAME 2: schedules
+# Required columns:
+# - $starting_time: Start time of the schedule (dttm)
+# - $ending_time: End time of the schedule (dttm)
+
+# DATAFRAME 3: deliveries
+# Required columns:
+# - $time_accepted: Time when the order was accepted (dttm)
+# - $time_pick_up: Time when the order was picked up (dttm)
+# - $time_drop_off: Time when the order was dropped off (dttm)
+# - Location data: This can be either:
+#   - Separate columns for longitude and latitude for accepted, pick-up, and drop-off locations (double)
+#   - Or location data in the format "POINT(longitude latitude)", which can be handled by the script below (see the commented section for details)
+
+# DATAFRAME 4: geolocation
+# Required columns:
+# - $timestamps_ping: Timestamp of the ping (dttm)
+# - $location: Location data in the format "POINT(longitude latitude)" (see above for handling location data)
+
+
+```
+
+
+```{r chunk_4, warning=FALSE, error=TRUE}
+
+# Your data is now ready to be read into the script using the following dataframes.
+# Note that while not all dataframes are mandatory, their absence will limit the data available for analysis.
+# This script will create a few new columns necessary for further analysis.
+
+
+## PAYMENTS
+# sum up total pay
+#convert all columns that include form of base bay to numeric then sum it up to get total base pay
+base_pay_cols <- payments %>% select("pay_a","pay_b","pay_c") %>% names()
+payments <- payments %>%
+  mutate(across(all_of(base_pay_cols), ~ suppressWarnings(as.numeric(.)))) %>%
+    mutate(across(all_of(base_pay_cols), ~ replace_na(., 0)))
+payments$total_base_pay <- rowSums(payments %>% select(base_pay_cols))
+payments$total_pay <- payments$total_tips + payments$total_base_pay 
+
+# Create hour <dttm>, day <dttm>, month <dttm>, year <dttm> from loaded in data
+payments <- payments %>%
+  mutate(
+    hour = floor_date(time_stamp, "hour"),
+    day = floor_date(time_stamp, "day"),
+    month = floor_date(time_stamp, "month"),
+    year = floor_date(time_stamp, "year")
+  )
+# generate cols for day of the week, and hour of the day
+payments <- payments %>%
+  mutate(
+    day_of_week = wday(time_stamp, label = TRUE, abbr = FALSE, locale = Sys.setlocale("LC_ALL","English")), 
+    hour_of_day = format(time_stamp, "%H:00") 
+  )
+# Convert both to a factor to analyze them later as discrete categories
+payments$hour_of_day <- as.factor(payments$hour_of_day)
+payments$day_of_week <- as.factor(payments$day_of_week)
+
+## SCHEDULES
+
+# Add Shift IDs
+schedules <- schedules %>%
+  mutate(shift_id = 1:nrow(schedules)) %>%
+  select(shift_id, everything())
+
+# Adjust shift start if necessary
+ schedules <- schedules %>% mutate(actual_start = format(ymd_hms(starting_time) - minutes(0), format = "%Y-%m-%d %H:%M:%OS2"))
+
+
+## DELIVERIES
+
+# Format location data
+
+# If your data does not already have separate columns for longitude and latitude accepted, picked up, and dropped off,
+# you will need to extract these values from the location data for each. Typically, location data might be in the format "POINT(longitude latitude)".
+# Use the following steps to create new columns for longitude and latitude:
+
+# Extract longitude and latitude from the 'accepted_at_location' column
+# deliveries$longitude_accepted <- as.numeric(gsub("^POINT\\((\\d+\\.\\d+) .*$", "\\1", deliveries$accepted_at_location))
+# deliveries$latitude_accepted <- as.numeric(gsub("^POINT\\(\\d+\\.\\d+ (\\d+\\.\\d+)\\)$", "\\1", deliveries$accepted_at_location))
+
+# Extract longitude and latitude from the 'picked_up_at_location' column
+# deliveries$longitude_picked_up <- as.numeric(gsub("^POINT\\((\\d+\\.\\d+) .*$", "\\1", deliveries$picked_up_at_location))
+# deliveries$latitude_picked_up <- as.numeric(gsub("^POINT\\(\\d+\\.\\d+ (\\d+\\.\\d+)\\)$", "\\1", deliveries$picked_up_at_location))
+
+# If you have a 'dropped_off_at_location' column, extract longitude and latitude similarly
+# deliveries$longitude_dropped_off <- as.numeric(gsub("^POINT\\((\\d+\\.\\d+) .*$", "\\1", deliveries$dropped_off_at_location))
+# deliveries$latitude_dropped_off <- as.numeric(gsub("^POINT\\(\\d+\\.\\d+ (\\d+\\.\\d+)\\)$", "\\1", deliveries$dropped_off_at_location))
+
+# The regular expressions used in gsub function will extract numeric longitude and latitude values from
+# strings formatted as "POINT(longitude latitude)". Modify the column names as per your dataset.
+
+# Use the time data to calculate trip duration
+deliveries <- deliveries %>%
+  mutate(
+    duration_pick_up_to_drop_off = as.numeric(difftime(time_drop_off, time_pick_up, units = "secs")),
+    duration_to_pick_up = as.numeric(difftime(time_pick_up, time_accepted, units = "secs")),
+    duration_to_pick_up_minutes = round(duration_to_pick_up / 60, 2),
+    duration_pick_up_to_drop_off_in_minutes = round(duration_pick_up_to_drop_off / 60, 2),
+    total_trip_duration = as.numeric(difftime(time_drop_off, time_accepted, units = "secs")),
+    total_trip_duration_minutes = round(total_trip_duration / 60, 2)
+  )
+
+# Finally pull out the year accepted for us to analyze in the map
+deliveries <- deliveries %>%
+  mutate(year_accepted = floor_date(time_accepted, "year"))
+
+## GEOLOCATION
+
+# As noted above  location data is often  in the format "POINT(longitude latitude)".
+# The following steps will extract the numeric values for longitude and latitude from this format if you dont have the data already seperated
+# longitude_ping <- as.numeric(gsub("^POINT\\((\\d+\\.\\d+) .*$", "\\1", geolocation$location))
+# latitude_ping <- as.numeric(gsub("^POINT\\(\\d+\\.\\d+ (\\d+\\.\\d+)\\)$", "\\1", geolocation$location))
+
+```
+
+
+
+
+# Overview {data-orientation=rows}
+
+#### **GDPoweR Data Visualization Dashboard**
+
+This visualization is part of GDPoweR (Recovering workers’ data to negotiate and monitor collective agreements in the platform economy), a collaborative research project focused on industrial relations in the platform economy which is co-funded by the European Union. The purpose of the graphs and statistics shown in this dashboard is to help platform workers like yourself visualize and analyze data collected by platform companies during your work. However, be aware that the dashboard may only show a small share of your data.
+
+The visualizations were created by the project partner(s) in your country with the data donated by you and with the help of code developed by the European Centre for Social Welfare Policy and Research. No unauthorized individuals had access to your data. 
+
+For questions regarding your data and this visualization, please contact the organization you donated your data to. If you have questions regarding the code use to create these graphs and statistics, please contact Nikko Bilitza at the European Centre at bilitza@euro.centre.org
+
+
+
+Column {data-height=300}
+-----------
+### Project
+![](././GDPOWER.jpg){#id .class width=60% height=70%}
+![](././EU.jpg){#id .class width=50% height=60%}
+
+
+### Disclaimer
+This publication is part of the GDPoweR – Recovering workers’ data to negotiate and monitor collective agreements in the platform economy, which has received funding by the European Commission, DG Employment, Social Affairs and Inclusion, within the Social Prerogatives and Specific Competencies Lines (SocPL). The information and views set out in this document are those of the authors and do not necessarily reflect the views and official opinion of the European Union. Neither the European Union institutions and bodies nor any person acting on their behalf may be held responsible for the use which may be made of the information contained therein. 
+
+
+Column {data-height=300}
+------------------------------
+
+### Authors
+Nikko Bilitza (<bilitza@euro.centre.org>) and Nicolas Prinz (<prinz@euro.centre.org>)
+
+<div align="center" >
+  <img src="././03 European Centre.png" style="display: inline-block; width: 40%;"/>
+</div>
+
+### Partners
+```{r chunk_5, error=TRUE, warning=FALSE, echo=FALSE,out.width="28%",fig.cap="",fig.show='hold', fig.align='default'}
+knitr::include_graphics("././01 CY thema.jpg")
+knitr::include_graphics("././01 HIVA-KU Leuven.jpg")
+knitr::include_graphics("././002 UCLM.png")
+knitr::include_graphics("././04 INNOVATIEF.png")
+knitr::include_graphics("././05 IBS.jpg")
+knitr::include_graphics("././06 Fundacion.png")
+``` 
+
+
+
+
+# Your Data {data-orientation=rows}
+
+
+Column {data-height=75}
+----------------------------
+#### **Your Data Period**
+
+Row
+-----------------------------
+
+### From
+
+```{r chunk_6, error=TRUE}
+valueBox(min(as.Date(schedules$starting_time)), color = "#038C7F")
+```
+
+
+### To
+
+```{r chunk_7, error=TRUE}
+valueBox(max(as.Date(schedules$starting_time)), color = "#0378A6")
+```
+
+
+Column {data-height=75}
+----------------------------
+The analyzed data is drawn from several specific sections of your data and used to generate the visuals and statistics in this dashboard. The project partner in your country selected or calculated values from your data to match as closely as possible the definitions of the columns below. Therefore, there may be minor variations in the exact definition of each column which your project partner contact can clarify, but broadly, the inputted data includes the following:
+
+Column
+----------------------------
+- time_stamp: Timestamp of when the payment for an order occurred
+- pay_a, pay_b, ...: Columns for various forms of base pay per order. Base pay refers to the payments provided for completing tasks, excluding tips.
+- total_tips: Total tip payment received for an order
+- starting_time: Start time of a scheduled work shift
+- ending_time: End time of a scheduled work shift
+- time_accepted: Timestamp for when the order was accepted
+- time_pick_up: Timestamp for when the order was picked up
+- time_drop_off: Timestamp for when the order was dropped off
+- Location data: Longitude and latitude for accepted, pick-up, and drop-off locations
+- timestamps_ping: Timestamp for when GPS movement data was collected.
+- location: Longitude and latitude for when GPS movement data was collected.
+- start_at: Timestamp for when break started
+- end_at_ Timestamp for when break ended
+
+
+
+
+# Income {data-orientation=rows}
+
+Column {data-height=400}
+-------------------------------------
+   
+### Overall Earned Income (national currency)
+```{r chunk_8, warning = FALSE, error=TRUE}
+# Percent of income earned by tips and by base pay
+# Calculate total income from tips, base pay and both
+all_time_total_tips <- sum(payments$total_tips)
+all_time_total_base_pay <- sum(payments$total_base_pay)
+all_time_total_income <- all_time_total_base_pay + all_time_total_tips
+
+# Calculate percentage contribution of each income stream
+percent_tips <- (all_time_total_tips / all_time_total_income) * 100
+percent_base_pay <- (all_time_total_base_pay / all_time_total_income) * 100
+
+data.frame(all_time_total_income, all_time_total_base_pay, all_time_total_tips) %>% kable(., "simple", col.names = c("Income", "Base Pay", "Tips"), digits = 0, format.args = list(decimal.mark = '.', big.mark = ",")) 
+
+```
+
+
+### Average Income (national currency) per Day, Month and Year
+
+```{r chunk_9, warning = FALSE, error=TRUE}
+# Income per day
+day_summary <- payments %>%
+  group_by(day) %>%
+  summarise(
+    tips_day_sum = sum(total_tips),
+    base_pay_day_sum = sum(total_base_pay),
+    total_pay_day_sum = sum(total_pay))
+
+# Income per month
+month_summary <- payments %>%
+  group_by(month) %>%
+  summarise(
+    tips_month_sum = sum(total_tips),
+    base_pay_month_sum = sum(total_base_pay),
+    total_pay_month_sum = sum(total_pay))
+
+year_summary <- payments %>%
+  group_by(year) %>%
+  summarise(
+    tips_year_sum = sum(total_tips),
+    base_pay_year_sum = sum(total_base_pay),
+    total_pay_year_sum = sum(total_pay))
+
+data.frame(mean(day_summary$total_pay_day_sum), mean(day_summary$base_pay_day_sum), mean(day_summary$tips_day_sum)) %>% `rownames<-`("Day") %>%
+  kable(., "simple", col.names = c("Income", "Base Pay", "Tips"), digits = 2, format.args = list(decimal.mark = '.', big.mark = ",")) %>%
+  kable_styling(position = "center")
+
+data.frame(mean(month_summary$total_pay_month_sum), mean(month_summary$base_pay_month_sum), mean(month_summary$tips_month_sum)) %>% `rownames<-`("Month") %>%
+  kable(., "simple", col.names = c("Income", "Base Pay", "Tips"), digits = 2, format.args = list(decimal.mark = '.', big.mark = ",")) %>%
+  kable_styling(position = "center")
+
+data.frame(mean(year_summary$total_pay_year_sum), mean(year_summary$base_pay_year_sum), mean(year_summary$tips_year_sum)) %>% `rownames<-`("Year") %>%
+  kable(., "simple", col.names = c("Income", "Base Pay", "Tips"), digits = 2, format.args = list(decimal.mark = '.', big.mark = ",")) %>%
+  kable_styling(position = "center")
+```
+
+### Average Income (national currency) per Recorded Payment
+```{r  chunk_10, warning = FALSE, error=TRUE}
+data.frame(
+  
+# average total pay per Recorded Payment
+payments$total_pay %>%
+  mean %>%
+  round(2),
+
+# average base pay per per Recorded Payment
+payments$total_base_pay %>%
+  mean %>%
+  round(2),
+
+# average tip per per Recorded Payment
+payments$total_tips %>%
+  mean %>%
+  round(2)
+
+) %>% 
+  kable(., "simple", col.names = c("Income", "Base Pay", "Tips"), digits = 2, format.args = list(decimal.mark = '.', big.mark = ",")) %>%
+  kable_styling(position = "center")
+```
+
+### Average Income (national currency) per Hour
+```{r chunk_11, warning=FALSE, error=TRUE}
+# Shift ID column to payments_shifts dataframe
+payments_shifts <- payments %>%
+  rowwise() %>%
+  mutate(
+    shift_id = schedules %>%
+      filter(actual_start <= time_stamp & ending_time >= time_stamp) %>%
+      pull(shift_id) %>%
+      first()  # Extract the first match, assuming only one match per payment
+  ) %>%
+  ungroup()
+
+income_hour <- schedules %>%
+  left_join(
+    payments_shifts %>% 
+      group_by(shift_id) %>% 
+      summarise(income_shift = sum(total_pay, na.rm = TRUE), 
+                tip_shift = sum(total_tips, na.rm = TRUE), 
+                base_shift = sum(total_base_pay, na.rm = TRUE)), 
+    by = "shift_id"
+  ) %>%
+  mutate(across(c(income_shift, tip_shift, base_shift), ~ replace_na(., 0))) %>%
+  mutate(shift_time = difftime(ending_time, starting_time, units = "mins"))
+
+
+
+income_hour %>%
+  summarise(income_hour = mean(income_shift/(as.numeric(shift_time)/60)), 
+            base_hour = mean(base_shift/(as.numeric(shift_time)/60)), 
+            tip_hour = mean(tip_shift/(as.numeric(shift_time)/60)))%>% 
+  kable(., "simple", col.names = c("Income", "Base Pay", "Tips"), digits = 2, format.args = list(decimal.mark = '.', big.mark = ","),table.attr = "style='width:30%;'") %>%
+  kable_styling(position = "center")
+
+```
+
+
+Column {data-height=600}
+-------------------------------------
+    
+
+### Average Income (national currency) per Hour of the Day
+```{r chunk_12, error=TRUE, warning = FALSE}
+####  Hour of the day avg tips/base-pay/total pay **total per hour** #### 
+total_by_hour <- payments %>%
+  group_by(year, month, day, hour_of_day) %>%
+  summarize(total_income_unique_hour = sum(total_pay),
+            total_tips_unique_hour = sum(total_tips), 
+            total_base_unique_hour = sum(total_base_pay), .groups = 'drop')
+
+avg_hourly <- total_by_hour %>%
+  group_by(hour_of_day) %>%
+  summarise(average_total_income_by_hour = mean(total_income_unique_hour), 
+            average_total_tips_by_hour = mean(total_tips_unique_hour), 
+            average_total_base_by_hour = mean(total_base_unique_hour)) %>%
+  pivot_longer(-hour_of_day)
+
+avg_hourly %>% filter(!name == "average_total_income_by_hour") %>% ggplot(aes(x = hour_of_day, y = value, fill = forcats::fct_rev(name))) + 
+  geom_bar(stat = "identity") +  
+  ylab("Average income") + xlab("Hour of the day") + #ggtitle("Average income per hour of the day")+
+  scale_fill_manual(name = "Payment type", labels = c("Tips", "Base Pay"), values = c("#03588C","#04B2D9","#038C7F", "#0D0D0D")) +
+  theme_minimal() + theme(axis.text.x=element_text(angle=60, hjust=1))
+```
+
+### Average Income (national currency) per Day of the Week
+```{r chunk_13, warning=FALSE, error=TRUE}
+####  Day of week avg tips/base-pay/total pay **total per day** 
+total_by_weekday <- payments %>%
+  group_by(year, month, day, day_of_week) %>%
+  summarize(total_income_unique_weekday = sum(total_pay),
+            total_tips_unique_weekday = sum(total_tips), 
+            total_base_unique_weekday = sum(total_base_pay), .groups = 'drop')
+
+avg_weekday <- total_by_weekday %>%
+  group_by(day_of_week) %>%
+  summarise(average_total_income_by_weekday = mean(total_income_unique_weekday), 
+            average_total_tips_by_weekday = mean(total_tips_unique_weekday), 
+            average_total_base_by_weekday = mean(total_base_unique_weekday)) %>%
+  pivot_longer(-day_of_week)
+
+avg_weekday %>% filter(!name == "average_total_income_by_weekday") %>% ggplot(aes(x = factor(day_of_week, levels = c("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")), y = value, fill = forcats::fct_rev(name))) + 
+  geom_bar(stat = "identity") +  
+  ylab("Average income") + xlab("Day of the week") + #ggtitle("Average income per day of the week")+
+  scale_fill_manual(name = "Payment type", labels = c("Tips", "Base Pay"), values = c("#03588C","#04B2D9","#038C7F", "#0D0D0D")) +
+  theme_minimal() + theme(axis.text.x=element_text(angle=60, hjust=1))
+```
+
+
+
+
+# Shifts {data-orientation=rows}
+
+
+Row
+-------------------------------------
+
+```{r chunk_14, error=TRUE, warning=FALSE}
+## Note: Multiple shifts per day are possible!
+
+# Number of shifts per year
+n_shifts_year <- schedules %>%
+  mutate(date_shift = format(as_date(round_date(ymd_hms(starting_time), "year")), format = "%Y")) %>% group_by(date_shift) %>%
+  summarize(shifts = n()) 
+#cat("Average number of completed shifts by year:", mean(n_shifts_year$shifts), "  \n")
+
+# Number of shifts per month
+n_shifts_month <- schedules %>%
+  mutate(date_shift = format(as_date(round_date(ymd_hms(starting_time), "month")), format = "%m.%Y")) %>% group_by(date_shift) %>% summarize(shifts = n()) 
+#cat("Average number of completed shifts by month:", mean(n_shifts_month$shifts), "  \n")
+
+# Number of shifts per week
+n_shifts_week <- schedules %>%
+  mutate(date_shift = format(as_date(round_date(ymd_hms(starting_time), "week")), format = "%U/%Y")) %>% group_by(date_shift) %>% summarize(shifts = n()) 
+#cat("Average number of completed shifts by week:", mean(n_shifts_week$shifts), "  \n")
+
+# Number of shifts per day
+n_shifts_day <- schedules %>%
+  mutate(date_shift = as_date(starting_time)) %>% group_by(date_shift) %>% summarize(shifts = n()) 
+#cat("Average number of completed shifts by day:", mean(n_shifts_day$shifts), "  \n")
+```
+
+
+### Total Number of Completed Shifts
+```{r chunk_15, error = TRUE, warning = FALSE}
+valueBox(nrow(schedules), color = "#038C7F")
+```
+
+
+### Average Shifts per Year
+
+```{r chunk_16, error = TRUE, warning = FALSE}
+valueBox(mean(n_shifts_year$shifts)%>% round(2), color = "#0378A6")
+```
+
+### Average Shifts per Month
+
+```{r chunk_17, error = TRUE, warning = FALSE}
+valueBox(mean(n_shifts_month$shifts)%>% round(2), color = "#04B2D9")
+```
+
+### Average Shifts per Week
+
+```{r chunk_18, error = TRUE, warning = FALSE}
+valueBox(mean(n_shifts_week$shifts)%>% round(2), color = "#03588C")
+```
+
+### Average Shifts per Day
+
+```{r chunk_19, error = TRUE, warning = FALSE}
+valueBox(mean(n_shifts_day$shifts)%>% round(2), color = "#0D0D0D")
+```
+
+
+Row {data-height=400}
+-------------------------------------
+
+### Number of Shifts per Day of the Week
+```{r chunk_20, error = TRUE, warning = FALSE}
+# Number of shifts per weekday
+n_shifts_weekday <- schedules %>%
+  mutate(date_shift = weekdays(as_date(ymd_hms(starting_time)))) %>% 
+  group_by(date_shift) %>%
+  summarize(shifts = n()) %>% 
+  arrange(ordered(date_shift, levels = c("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")))
+
+n_shifts_weekday %>% 
+  ggplot(aes(x = factor(date_shift, levels = c("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")), y = shifts)) + 
+  geom_bar(stat = "identity", fill = "#0378A6") +   # Bar plot
+  ylab("Number of shifts") + xlab("Day of the week") + #ggtitle("Shifts per day of the week")  +
+  theme_minimal() + theme(axis.text.x=element_text(angle=60, hjust=1))
+```
+
+
+### Number of Shifts by Starting Time
+```{r chunk_21, error = TRUE, warning = FALSE}
+# Number of shifts by starting time 
+n_shifts_time_start <- schedules %>%
+  mutate(hour_shift = hour(round_date(ymd_hms(starting_time), "1 hours"))) %>%
+  group_by(hour_shift) %>%
+  summarise(shifts = n())
+
+n_shifts_time_start %>% 
+  ggplot(aes(x = hms::hms(hour_shift * 3600), y = shifts)) + 
+  geom_bar(stat = "identity", fill = "#0378A6") +   
+  ylab("Number of shifts") + xlab("Starting time") + #ggtitle("Shifts per starting time")  + 
+  theme_minimal() + theme(axis.text.x=element_text(angle=60, hjust=1))
+```
+
+
+
+
+# Working Hours {data-orientation=rows}
+
+
+Row
+-----------------------------------
+
+### Average Shift Length (in Hours)
+```{r chunk_22, error = TRUE, warning = FALSE}
+# average shift length
+valueBox(
+schedules %>% summarise(shift_length = mean(difftime(ending_time, starting_time, units = "hours"))) %>% as.numeric() %>% round(2) # mins
+, color = "#038C7F")
+```
+
+
+### Average Working Hours per Day Worked 
+```{r chunk_23, error = TRUE, warning = FALSE}
+valueBox(
+schedules %>% 
+  group_by(as.Date(starting_time)) %>%
+  summarise(shift_length = sum(difftime(ending_time, starting_time, units = "hours"))) %>%
+  ungroup() %>%
+  summarise(avg_hours_day = mean(shift_length) %>% as.numeric() %>% round(2))
+,color = "#0378A6")
+```
+
+
+Row {.tabset .tabset-fade}
+------------------------------
+
+```{r chunk_24, error = TRUE, warning = FALSE}
+# payments per shift and duration of shift
+schedules_length <- schedules %>%
+  left_join(
+    payments_shifts %>% 
+      group_by(shift_id) %>% 
+      summarise(income_shift = sum(total_pay, na.rm = TRUE), 
+                tip_shift = sum(total_tips, na.rm = TRUE), 
+                base_shift = sum(total_base_pay, na.rm = TRUE)), 
+    by = "shift_id"
+  ) %>%
+  mutate(across(c(income_shift, tip_shift, base_shift), ~ replace_na(., 0))) %>%
+  mutate(shift_time = difftime(ending_time, starting_time, units = "mins"))
+
+```
+
+
+### Shift Length and Total Income (national currency)
+```{r chunk_25, fig.width=4, fig.height=2, error = TRUE, warning = FALSE}
+ggplot(schedules_length, aes(x = income_shift, y=as.numeric(shift_time)/60)) +
+  geom_point() +  
+  geom_smooth(method = "lm", formula = y ~ x, fill='#0378A6') +
+  labs(#title = "Shift Duration and Overall Income",
+       x = "Income per shift in national currency",
+       y = "Duration (in hours)", 
+       caption = "Linear regression line and 95% confidence bands shown.") +
+  theme_minimal()
+```
+
+
+### Shift Length and Base Pay
+```{r chunk_26, fig.width=4, fig.height=2, error = TRUE, warning = FALSE}
+ggplot(schedules_length, aes(x = base_shift, y=as.numeric(shift_time)/60)) +
+  geom_point() +  
+  geom_smooth(method = "lm", formula = y ~ x, fill='#0378A6') +
+  labs(#title = "Shift Duration and Base Pay",
+       x = "Income per shift in national currency",
+       y = "Duration (in hours)", 
+       caption = "Linear regression line and 95% confidence bands shown.") +
+  theme_minimal()
+```
+
+
+### Shift Length and Tips
+```{r chunk_27, fig.width=4, fig.height=2, error = TRUE, warning = FALSE}
+ggplot(schedules_length, aes(x = tip_shift, y=as.numeric(shift_time)/60)) +
+  geom_point() +  
+  geom_smooth(method = "lm", formula = y ~ x, fill='#0378A6') +
+  labs(#title = "Shift Duration and Tips", 
+       x = "Income per shift in national currency",
+       y = "Duration (in hours)", 
+       caption = "Linear regression line and 95% confidence bands shown.") +
+  theme_minimal()
+```
+
+
+Row {.tabset}
+------------------------------
+
+```{r chunk_28, error = TRUE, warning = FALSE}
+## Prepare data for working hours
+
+### 1. **Calculate Break Time**
+# The break time is calculated by subtracting the break's start time from its end time.
+# Then, we map each break to the corresponding shift based on the schedule times.
+
+# Step 1: Calculate break duration and map to shifts
+breaks_shifts <- breaks %>%
+  mutate(break_time = difftime(end_at, start_at, units = "mins")) %>%
+  rowwise() %>%
+  mutate(
+    # Map the break to the corresponding shift
+    shift_id = schedules %>%
+      filter(actual_start <= start_at & ending_time >= start_at) %>%
+      pull(shift_id) %>%
+      first()  # We assume each break belongs to one shift
+  ) %>%
+  ungroup() %>%
+  # Sum up the total break time per shift if there are multiple breaks
+  group_by(shift_id) %>%
+  summarise(break_time = sum(break_time, na.rm = TRUE))
+
+### 2. **Calculate Delivery Time**
+# We now calculate the time spent on deliveries during each shift.
+# This is done by taking the time difference between the pick-up and drop-off times for each delivery.
+
+# Step 2: Calculate delivery duration and map to shifts
+orders_shifts <- deliveries %>%
+  rowwise() %>%
+  mutate(
+    # Map the delivery to the corresponding shift
+    shift_id = schedules %>%
+      filter(actual_start <= time_accepted & ending_time >= time_accepted) %>%
+      pull(shift_id) %>%
+      first()  # We assume each delivery belongs to one shift
+  ) %>%
+  ungroup() %>%
+  # Calculate delivery time for each delivery
+  mutate(delivery_time = difftime(time_drop_off, time_pick_up, units = "mins")) %>%
+  # Sum up the total delivery time per shift
+  group_by(shift_id) %>%
+  summarise(delivery_time = sum(delivery_time, na.rm = TRUE))
+
+### 3. **Merge Breaks and Deliveries with Shifts**
+# We merge the calculated break and delivery times with the shift data.
+# This gives us the total break and delivery time for each shift.
+
+# Step 3: Merge delivery time and break time with shift schedule
+working_time <- schedules %>%
+  left_join(breaks_shifts, by = "shift_id") %>%
+  left_join(orders_shifts, by = "shift_id") %>%
+  # Replace NA with 0 for shifts with no breaks or deliveries
+  mutate(break_time = ifelse(is.na(break_time), 0, break_time),
+         delivery_time = ifelse(is.na(delivery_time), 0, delivery_time))
+
+### 4. **Calculate Shift Duration and Waiting Time**
+# Now, calculate the total shift time and determine the waiting time as the remainder of the shift time
+# after subtracting the delivery time and break time.
+
+# Step 4: Calculate shift duration and determine waiting time
+working_time <- working_time %>%
+  mutate(shift_time = difftime(ending_time, starting_time, units = "mins"),
+         # Calculate waiting time as the remainder of the shift after deliveries and breaks
+         wait_time = as.numeric(shift_time) - (as.numeric(break_time) + as.numeric(delivery_time)))
+
+### 5. **Calculate Percentage Shares**
+# Finally, we calculate the percentage of the shift spent on deliveries, breaks, and waiting.
+# We ensure these percentages sum to 100% for each shift.
+
+# Step 5: Calculate percentage of shift time spent on each activity
+working_time <- working_time %>%
+  mutate(
+    work_share = (as.numeric(delivery_time) / as.numeric(shift_time)) * 100,
+    break_share = (as.numeric(break_time) / as.numeric(shift_time)) * 100,
+    wait_share = (as.numeric(wait_time) / as.numeric(shift_time)) * 100,
+    # Ensure the shares sum to 100%
+    total_share = work_share + break_share + wait_share
+  )
+
+# Check if any shifts do not sum to 100% due to rounding errors
+discrepancies <- working_time %>% filter(abs(total_share - 100) > 0.01)
+
+# Output the discrepancies, if any
+if (nrow(discrepancies) > 0) {
+  print("There is an issue with overlapping time data")
+  print(discrepancies)
+} else {
+  NULL
+}
+
+```
+
+
+### Breakdown of Average Shift Time Allocation (All Shifts)
+```{r chunk_29, fig.width=4, fig.height=2, error = TRUE, warning = FALSE}
+# decomposition of working time for all time
+working_time %>% summarise(avg_work_share = mean(work_share), 
+                           avg_wait_share = mean(wait_share), 
+                           avg_break_share = mean(break_share), 
+                           time = "all time") %>% pivot_longer(-time) %>%
+  ggplot(aes(x = time, y = value, fill = name)) + 
+  geom_bar(stat = "identity") +
+  geom_text(aes(label = paste0(round(value, 0), "%")),position = position_stack(vjust = 0.5),  # Position labels in the middle of bars
+            size = 3, color = rep(c("darkblue", "#006400", "black"), 1)) + 
+  coord_flip() + 
+  ylab("%") + xlab("") + #ggtitle("Durchschnittliche Arbeitszeit")+
+  scale_fill_manual(name = "Working time", labels = c("Break", "Waiting", "Active work"), values = c("#03588C","#04B2D9","#038C7F"))  + 
+  theme_minimal()
+```
+
+
+### Breakdown of Average Shift Time Allocation by Month
+```{r chunk_30, fig.width=4, fig.height=2, error = TRUE, warning = FALSE}
+
+# decomposition of working time by month
+working_time %>% 
+  mutate(month = format(as_date(round_date(ymd_hms(starting_time), "month")), format = "%m")) %>%
+  group_by(month) %>% summarise(avg_work_share = mean(work_share), 
+                           avg_wait_share = mean(wait_share), 
+                           avg_break_share = mean(break_share)) %>% pivot_longer(-month) %>%
+  ggplot(aes(x = month, y = value, fill = name)) + 
+  geom_bar(stat = "identity") +
+  geom_text(aes(label = paste0(round(value, 0), "%")),position = position_stack(vjust = 0.5),  # Position labels in the middle of bars
+            size = 3, color = rep(c("darkblue", "#006400", "black"), length(unique(format(as_date(round_date(ymd_hms(working_time$starting_time), "month")), format = "%m"))))) + 
+  coord_flip() + 
+  ylab("%") + xlab("Month") + #ggtitle("Durchschnittliche Arbeitszeit")+
+  scale_fill_manual(name = "Working time", labels = c("Break", "Waiting", "Active work"), values = c("#03588C","#04B2D9","#038C7F"))  + 
+  theme_minimal()
+
+```
+
+
+### Breakdown of Average Shift Time Allocation by Day of the Week
+```{r chunk_31, fig.width=4, fig.height=2, error = TRUE, warning = FALSE}
+# decomposition of working time by weekday
+working_time %>% 
+  mutate(weekdays = wday(starting_time, label = TRUE, abbr = FALSE, locale = Sys.setlocale("LC_ALL","English"))) %>%
+  group_by(weekdays) %>% summarise(avg_work_share = mean(work_share), 
+                           avg_wait_share = mean(wait_share), 
+                           avg_break_share = mean(break_share)) %>% pivot_longer(-weekdays) %>%
+  ggplot(aes(x = factor(weekdays, levels = c("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")), y = value, fill = name)) + 
+  geom_bar(stat = "identity") +
+  geom_text(aes(label = paste0(round(value, 0), "%")),position = position_stack(vjust = 0.5),  # Position labels in the middle of bars
+            size = 3, color = rep(c("darkblue", "#006400", "black"), length(unique(wday(working_time$starting_time, label = TRUE, abbr = FALSE, locale = Sys.setlocale("LC_ALL","English")))))) + 
+  coord_flip() + 
+  ylab("%") + xlab("") + #ggtitle("Durchschnittliche Arbeitszeit")+
+  scale_fill_manual(name = "Working time", labels = c("Break", "Waiting", "Active work"), values = c("#03588C","#04B2D9","#038C7F"))  + 
+  theme_minimal()
+
+```
+
+
+Deliveries {data-orientation=rows}
+=====
+
+Row
+---------------------------
+
+### Number of Completed Deliveries
+```{r chunk_32, error = TRUE, warning = FALSE}
+valueBox(nrow(deliveries), color = "#03588C")
+```
+
+
+### Average Duration of a Delivery (Minutes)
+```{r chunk_34, error = TRUE, warning = FALSE}
+
+# Trip Duration Analysis
+
+# Calculate the average duration to pick up
+average_duration_to_pick_up <- deliveries %>%
+  summarise(average_duration_to_pick_up_minutes = mean(duration_to_pick_up_minutes, na.rm = TRUE))
+
+# Calculate the average duration from pick up to drop off
+average_duration_pick_up_to_drop_off <- deliveries %>%
+  summarise(average_duration_pick_up_to_drop_off_minutes = mean(duration_pick_up_to_drop_off_in_minutes, na.rm = TRUE))
+
+# Extract the values from the summaries
+average_duration_to_pick_up_minutes <- average_duration_to_pick_up$average_duration_to_pick_up_minutes
+average_duration_pick_up_to_drop_off_minutes <- average_duration_pick_up_to_drop_off$average_duration_pick_up_to_drop_off_minutes
+
+
+
+# Calculate the average duration of a delivery
+average_trip_duration <- deliveries %>%
+  summarise(average_duration_minutes = mean(total_trip_duration_minutes, na.rm = TRUE))
+
+# Extract the value from the summary
+average_duration_minutes <- average_trip_duration$average_duration_minutes
+# Print the results
+#cat("Average duration of a delivery trip from accepting the order to pick-up:", round(average_duration_to_pick_up_minutes, 2), "Minutes\n")
+#cat("Average duration of a delivery trip from pick-up to drop-off:", round(average_duration_pick_up_to_drop_off_minutes, 2), "Minutes\n")
+#cat("Average duration of a complete delivery from accepting the order to drop-off", round(average_duration_minutes, 2))
+
+valueBox(average_duration_minutes %>% round(2), color = "#04B2D9")
+
+```
+
+
+
+
+Row
+---------------------------
+
+### Average Number of Deliveries per Shift
+```{r chunk_35, error = TRUE, warning = FALSE}
+# Shift ID column to deliveries dataframe
+orders_shifts <- deliveries %>%
+  rowwise() %>%
+  mutate(
+    shift_id = schedules %>%
+      filter(actual_start <= time_accepted & ending_time >= time_accepted) %>%
+      pull(shift_id) %>%
+      first()  # Extract the first match, assuming only one match per payment
+  ) %>%
+  ungroup()
+
+# Total deliveries for each shift, with all shifts included
+total_orders_each_shift <- schedules %>%
+  select(shift_id, starting_time, ending_time) %>%
+  left_join(
+    orders_shifts %>% group_by(shift_id) %>% summarise(orders_shift = n()), 
+    by = "shift_id"
+  ) %>%
+  mutate(orders_shift = replace_na(orders_shift, 0))  # Replace NA with 0 for empty shifts
+
+
+# Average deliveries per shift 
+average_value <- total_orders_each_shift %>% summarise(avg_orders_shift = mean(orders_shift)) %>% as.numeric()
+
+valueBox(average_value %>% round(2), color = "#04B2D9")
+
+```
+
+
+### Average Number of Deliveries per Hour
+```{r chunk_36, error = TRUE, warning = FALSE}
+
+orders_hour <- total_orders_each_shift %>% mutate(hours_worked = ymd_hms(ending_time) - ymd_hms(starting_time), 
+                                   orders_hour = orders_shift/as.numeric(hours_worked))
+
+# Average deliveries per hour worked
+average_value <- orders_hour %>% summarise(avg = mean(orders_hour))%>% as.numeric()
+valueBox(average_value %>% round(2), color = "#03588C")
+```
+
+### Average Number of Deliveries per Day Worked
+```{r chunk_37}
+deliveries_day <- deliveries %>%
+  mutate(date_acceptance = as_date(time_accepted)) %>%
+  group_by(date_acceptance) %>%
+  summarize(deliveries_day = n()) 
+
+deliveries_avg_day <- mean(deliveries_day$deliveries_day)
+valueBox(deliveries_avg_day %>% round(2), color = "#038C7F")
+```
+
+
+Row {.tabset}
+------------------------------
+
+### Number of Deliveries per Day of the Week
+```{r chunk_38, error = TRUE, warning = FALSE}
+# Number of deliveries per weekday
+deliveries_weekday <- deliveries %>%
+  mutate(date_acceptance =  wday(time_accepted, label = TRUE, abbr = FALSE, locale = Sys.setlocale("LC_ALL","English"))) %>%
+  group_by(date_acceptance) %>%
+  summarize(deliveries_weekday = n()) %>% 
+  arrange(ordered(date_acceptance, levels = c("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")))
+
+deliveries_avg_weekday <- mean(deliveries_weekday$deliveries_weekday)
+
+deliveries_weekday %>% 
+  ggplot(aes(x = factor(date_acceptance, levels = c("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")), y = deliveries_weekday)) + 
+  geom_bar(stat = "identity", fill = "#0378A6") +
+  ylab("Number of deliveries") + xlab("Days of the week") +
+  theme_minimal() + theme(axis.text.x=element_text(angle=0, hjust=1))
+```
+
+
+### Number of Deliveries by Time of the Day
+```{r chunk_39, error = TRUE, warning = FALSE}
+# Number of deliveries per hour
+deliveries_hour <- deliveries %>%
+  mutate(date_acceptance = hour(round_date(ymd_hms(time_accepted), "1 hour"))) %>%
+  group_by(date_acceptance) %>%
+  summarize(deliveries_hour = n()) 
+
+deliveries_avg_hour <- mean(deliveries_hour$deliveries_hour)
+
+deliveries_hour %>% 
+  ggplot(aes(x = hms::hms(date_acceptance * 3600), y = deliveries_hour)) + 
+  geom_bar(stat = "identity", fill = "#0378A6") + 
+  ylab("Number of deliveries") + xlab("Hour of the Day") +
+  #scale_x_date(date_breaks = "1 hour", date_labels =  "%h")  + 
+  theme_minimal() + theme(axis.text.x=element_text(angle=0, hjust=1))
+```
+
+
+
+GPS Data {data-orientation=rows}
+=====
+
+Row {.tabset}
+------------------------------
+
+
+### Map of Deliveries
+```{r chunk_40, error = TRUE, warning = FALSE}
+
+# This script generates a map showing geographic data from the delivery dataframe 
+# The minimum required data is the pick-up location (longitude_picked_up, latitude_picked_up) and timestamp data.
+# Ideally, you would also have the acceptance point (longitude_accepted, latitude_accepted)  and timestamp data 
+# and the drop-off point (longitude_dropped_off, latitude_dropped_off) and timestamp data for more detailed data
+# If you do not have either the acceptance point or the drop-off point, follow the comments within 
+# the code to remove the relevant sections that rely on these data points.
+
+# Calculate the distance between accepted and pick-up points in meters and convert to kilometers
+
+# Calculate the distances and total distance
+deliveries <- deliveries %>%
+  rowwise() %>%
+  mutate(
+    # Calculate the distance between accepted and pick-up points in meters and convert to kilometers
+    distance_accepted_to_pick_up = ifelse(!is.na(longitude_accepted) & !is.na(latitude_accepted), 
+                                          distHaversine(c(longitude_accepted, latitude_accepted), 
+                                                        c(longitude_picked_up, latitude_picked_up)) / 1000, 
+                                          NA),
+    # Calculate the distance between pick-up points and drop-off in meters and convert to kilometers
+    distance_pick_up_to_drop_off = ifelse(!is.na(longitude_picked_up) & !is.na(latitude_picked_up), 
+                                          round(distHaversine(c(longitude_picked_up, latitude_picked_up), 
+                                                              c(longitude_dropped_off, latitude_dropped_off)) / 1000, 2), 
+                                          NA),
+    # Calculate the total distance from accepted to drop-off without factoring in the pick-up point
+    total_distance_without_pick_up = ifelse(!is.na(longitude_accepted) & !is.na(latitude_accepted) & 
+                                            !is.na(longitude_dropped_off) & !is.na(latitude_dropped_off),
+                                            round(distHaversine(c(longitude_accepted, latitude_accepted), 
+                                                                c(longitude_dropped_off, latitude_dropped_off)) / 1000, 2),
+                                            NA),
+    # Calculate the total distance from accepted to pick-up to drop-off
+    total_distance = ifelse(!is.na(distance_accepted_to_pick_up) & !is.na(distance_pick_up_to_drop_off), 
+                            round(distance_accepted_to_pick_up + distance_pick_up_to_drop_off, 2), 
+                            NA)
+  )
+# Create the leaflet map
+
+# Initialize map with base tiles
+map <- leaflet() %>%
+  addProviderTiles("OpenStreetMap.Mapnik")
+
+# Function to add layers
+add_layers <- function(map, data) {
+  if (is.null(data) || nrow(data) == 0) {
+    return(map) # If data is NULL or empty, return the map without adding layers
+  }
+
+  # Add lines between accepted and picked up points
+  if ("longitude_accepted" %in% colnames(data) && "latitude_accepted" %in% colnames(data)) {
+    for(i in 1:nrow(data)) {
+      map <- map %>%
+        addPolylines(lng = c(data$longitude_accepted[i], data$longitude_picked_up[i]),
+                     lat = c(data$latitude_accepted[i], data$latitude_picked_up[i]),
+                     color = "purple", weight = 1, opacity = .8,
+                     group = "Accepted to Pick-Up Travel")
+    }
+  }
+
+  # Add lines between picked up points and drop-off
+  if ("longitude_dropped_off" %in% colnames(data) && "latitude_dropped_off" %in% colnames(data)) {
+    for(i in 1:nrow(data)) {
+      map <- map %>%
+        addPolylines(lng = c(data$longitude_picked_up[i], data$longitude_dropped_off[i]),
+                     lat = c(data$latitude_picked_up[i], data$latitude_dropped_off[i]),
+                     color = "green", weight = 1, opacity = .8,
+                     group = "Pick-Up to Drop-Off Travel")
+    }
+  }
+
+  # Add complete trip lines
+  if ("longitude_accepted" %in% colnames(data) && "latitude_accepted" %in% colnames(data) &&
+      "longitude_dropped_off" %in% colnames(data) && "latitude_dropped_off" %in% colnames(data)) {
+    for(i in 1:nrow(data)) {
+      map <- map %>%
+        addPolylines(lng = c(data$longitude_accepted[i], data$longitude_picked_up[i], data$longitude_dropped_off[i]),
+                     lat = c(data$latitude_accepted[i], data$latitude_picked_up[i], data$latitude_dropped_off[i]),
+                     color = "blue", weight = 1, opacity = .8,
+                     group = "Complete Trip")
+    }
+  }
+
+  # Add lines between accepted points and drop-off without
+  if ("longitude_accepted" %in% colnames(data) && "latitude_accepted" %in% colnames(data) &&
+      "longitude_dropped_off" %in% colnames(data) && "latitude_dropped_off" %in% colnames(data)) {
+    for(i in 1:nrow(data)) {
+      map <- map %>%
+        addPolylines(lng = c(data$longitude_accepted[i], data$longitude_dropped_off[i]),
+                     lat = c(data$latitude_accepted[i], data$latitude_dropped_off[i]),
+                     color = "red", weight = 1, opacity = .8,
+                     group = "Accepted to Drop-off Travel (without pick-up)")
+    }
+  }
+
+  # Add accepted points
+  if ("longitude_accepted" %in% colnames(data) && "latitude_accepted" %in% colnames(data)) {
+    map <- map %>%
+      addCircleMarkers(data = data, ~longitude_accepted, ~latitude_accepted,
+                       radius = 5,
+                       fillColor = "blue",
+                       fillOpacity = .8,
+                       stroke = FALSE,
+                       weight = 2,
+                       group = "Accepted Points",
+                       popup = ~paste("<div style='font-size:16px; color:black;'><b>Delivery Accepted</b><br>",
+                                      "Longitude:", longitude_accepted, "<br>",
+                                      "Latitude:", latitude_accepted, "<br>",
+                                      ifelse(!is.na(time_accepted), paste("Time Accepted:", time_accepted, "<br>"), ""),
+                                      ifelse(!is.na(distance_accepted_to_pick_up), paste("Distance to Pick-Up Location:", round(distance_accepted_to_pick_up, 2), "km", "<br>"), ""),
+                                      ifelse(!is.na(duration_to_pick_up_minutes), paste("Time from Accepted Location to Pick-Up:", duration_to_pick_up_minutes, "Minutes", "<br>"), "")))
+  }
+
+  # Add picked up points
+  map <- map %>%
+    addCircleMarkers(data = data, ~longitude_picked_up, ~latitude_picked_up,
+                     radius = 5,
+                     fillColor = "purple",
+                     fillOpacity = .5,
+                     stroke = FALSE,
+                     weight = 1.5,
+                     group = "Picked Up Points",
+                     popup = ~paste("<div style='font-size:16px; color:black;'><b>Delivery Picked Up</b><br>",
+                                    "Longitude:", longitude_picked_up, "<br>",
+                                    "Latitude:", latitude_picked_up, "<br>",
+                                    ifelse(!is.na(time_pick_up), paste("Time Picked Up:", time_pick_up, "<br>"), ""),
+                                    ifelse(!is.na(distance_pick_up_to_drop_off), paste("Distance from Pick-Up to Drop-Off:", round(distance_pick_up_to_drop_off, 2), "km", "<br>"), ""),
+                                    ifelse(!is.na(duration_pick_up_to_drop_off_in_minutes), paste("Time from Pick-up to Drop-Off:", duration_pick_up_to_drop_off_in_minutes, "Minutes", "<br>"), "")))
+
+  # Add drop-off points
+  if ("longitude_dropped_off" %in% colnames(data) && "latitude_dropped_off" %in% colnames(data)) {
+    map <- map %>%
+      addCircleMarkers(data = data, ~longitude_dropped_off, ~latitude_dropped_off,
+                       radius = 5,
+                       fillColor = "green",
+                       fillOpacity = .7,
+                       stroke = FALSE,
+                       weight = 1.5,
+                       group = "Dropped-off Points",
+                       popup = ~paste("<div style='font-size:16px; color:black;'><b>Delivery Dropped-off</b><br>",
+                                      "Longitude:", longitude_dropped_off, "<br>",
+                                      "Latitude:", latitude_dropped_off, "<br>",
+                                      ifelse(!is.na(time_drop_off), paste("Time Dropped-Off:", time_drop_off, "<br>"), ""),
+                                      ifelse(!is.na(total_distance_without_pick_up), paste("Direct Distance from Acceptance point to Drop-Off Point (Excluding Pickup):", total_distance_without_pick_up, "km", "<br>"), ""),
+                                      ifelse(!is.na(total_distance), paste("Total Trip Distance:", total_distance, "km", "<br>"), ""),
+                                      ifelse(!is.na(total_trip_duration_minutes), paste("Total Trip Duration:", total_trip_duration_minutes, "Minutes", "<br>"), "")))
+  }
+
+  return(map)
+}
+
+# Add layers without considering the year
+map <- add_layers(map, deliveries)
+
+# Combine all layers into the map with layer control
+map <- map %>%
+  addLayersControl(
+    overlayGroups = c(
+      "Accepted Points", "Picked Up Points", "Dropped-off Points", "Accepted to Pick-Up Travel", "Pick-Up to Drop-Off Travel", "Complete Trip", "Accepted to Drop-off Travel (without pick-up)"
+    ),
+    options = layersControlOptions(collapsed = FALSE, autoZIndex = FALSE)
+  )
+
+# Display the map
+map
+
+
+
+```
+
+
+### Map of Movements
+```{r chunk_41, error = TRUE, warning = FALSE}
+
+leaflet() %>%
+  addProviderTiles("OpenStreetMap.Mapnik") %>%
+  addPolylines(data = geolocation, 
+               lng = ~longitude_ping, 
+               lat = ~latitude_ping, 
+               group = "Possible Travel Between Data Points", 
+               opacity = 1,  # Increased opacity
+               color = "black", 
+               weight = 1) %>%
+  addCircleMarkers(data = geolocation, 
+                   lng = ~longitude_ping, 
+                   lat = ~latitude_ping,
+                   radius = 5,
+                   fillColor = "red",
+                   fillOpacity = 0.6,
+                   stroke = FALSE,
+                   weight = 1,
+                   popup = ~paste("Timestamp: ", timestamps_ping, "<br>",
+                                  "Latitude: ", latitude_ping, "<br>",
+                                  "Longitude: ", longitude_ping),
+                   group = "Location Data") %>%
+  addLayersControl(
+    overlayGroups = c("Possible Travel Between Data Points", "Location Data"),
+    options = layersControlOptions(collapsed = FALSE)
+  )
+
+
+```
+
