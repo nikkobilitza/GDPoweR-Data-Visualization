@@ -11,6 +11,8 @@ This work is licensed under a Creative Commons Attribution Non-Commercial 4.0 In
 ### Disclaimer:
 This publication is part of the GDPoweR – Recovering workers’ data to negotiate and monitor collective agreements in the platform economy, which has received funding by the European Commission, DG Employment, Social Affairs and Inclusion, within the Social Prerogatives and Specific Competencies Lines (SocPL). The information and views set out in this document are those of the authors and do not necessarily reflect the views and official opinion of the European Union. Neither the European Union institutions and bodies nor any person acting on their behalf may be held responsible for the use which may be made of the information contained therein.
 
+The idea for the dashboard and the types of information contained and visualized in it were inspired by the Digipower Academy’s data experience for Uber drivers (https://digipower.academy/experience/uber-driver)
+
 ### Instructions
 The code in this repository was developed to visualize personal data platform workers requested from the platforms they work with through Subject Access Requests. It produces an html-dashboard with statistics and charts on incomes, shifts and working hours and deliveries as well as maps based on GPS locations. 
 
